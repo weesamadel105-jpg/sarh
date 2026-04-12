@@ -1,11 +1,55 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import crypto from "crypto";
 
 const ADMIN_ROUTE = "/sarh-core-ops-927";
 const AUTH_SECRET = process.env.AUTH_SECRET || "sarh-super-secret-key-12345";
 
-export function proxy(request: NextRequest) {
+// Edge-compatible HMAC verification using Web Crypto API
+async function verifyToken(token: string | undefined): Promise<any | null> {
+  if (!token) return null;
+
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 2) return null;
+
+    const sessionStr = Buffer.from(parts[0], "base64").toString("utf8");
+    const signature = parts[1];
+
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(AUTH_SECRET);
+    const key = await crypto.subtle.importKey(
+      "raw",
+      keyData,
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["verify"]
+    );
+
+    // Convert hex signature to Uint8Array
+    const sigArray = new Uint8Array(
+      signature.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16))
+    );
+
+    const isValid = await crypto.subtle.verify(
+      "HMAC",
+      key,
+      sigArray,
+      encoder.encode(sessionStr)
+    );
+
+    if (!isValid) return null;
+
+    const sessionData = JSON.parse(sessionStr);
+    if (new Date(sessionData.expires) < new Date()) return null;
+
+    return sessionData;
+  } catch (error) {
+    console.error("Token verification failed:", error);
+    return null;
+  }
+}
+
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
   // 1. Get tokens from cookies
@@ -20,99 +64,39 @@ export function proxy(request: NextRequest) {
   // 3. Admin Route Protection
   const isAdminRoute = pathname.startsWith(ADMIN_ROUTE);
   if (isAdminRoute) {
-    if (!adminToken) {
-      // Allow only the login page (ADMIN_ROUTE itself) to load without a token
+    const session = await verifyToken(adminToken);
+    if (!session || session.role !== "admin") {
       if (pathname !== ADMIN_ROUTE) {
         return NextResponse.redirect(new URL(ADMIN_ROUTE, request.url));
       }
       return NextResponse.next();
-    } else {
-      try {
-        const parts = adminToken.split(".");
-        if (parts.length !== 2) throw new Error("Invalid token");
-
-        const sessionStr = Buffer.from(parts[0], "base64").toString("utf8");
-        const signature = parts[1];
-
-        const expectedSignature = crypto
-          .createHmac("sha256", AUTH_SECRET)
-          .update(sessionStr)
-          .digest("hex");
-
-        if (signature !== expectedSignature) throw new Error("Invalid signature");
-
-        const sessionData = JSON.parse(sessionStr);
-        if (new Date(sessionData.expires) < new Date()) throw new Error("Token expired");
-        if (sessionData.role !== "admin") throw new Error("Not an admin");
-
-        return NextResponse.next();
-      } catch (error) {
-        if (pathname !== ADMIN_ROUTE) {
-          return NextResponse.redirect(new URL(ADMIN_ROUTE, request.url));
-        }
-      }
     }
+    return NextResponse.next();
   }
 
   // 4. Student Route Protection
   const isStudentRoute = pathname.startsWith("/student");
   if (isStudentRoute) {
-    if (!studentToken) {
+    const session = await verifyToken(studentToken);
+    if (!session) {
       const loginUrl = new URL("/login", request.url);
       loginUrl.searchParams.set("callbackUrl", pathname);
-      return NextResponse.redirect(loginUrl);
-    }
-    
-    try {
-      const parts = studentToken.split(".");
-      if (parts.length !== 2) throw new Error("Invalid token format");
-
-      const sessionStr = Buffer.from(parts[0], "base64").toString("utf8");
-      const signature = parts[1];
-
-      const expectedSignature = crypto
-        .createHmac("sha256", AUTH_SECRET)
-        .update(sessionStr)
-        .digest("hex");
-
-      if (signature !== expectedSignature) throw new Error("Invalid signature");
-
-      const sessionData = JSON.parse(sessionStr);
-      if (new Date(sessionData.expires) < new Date()) throw new Error("Token expired");
-
-      return NextResponse.next();
-    } catch (e) {
-      console.error("Middleware Auth Error:", e instanceof Error ? e.message : "Unknown error");
-      // Clear the invalid cookie and redirect to login
-      const response = NextResponse.redirect(new URL("/login", request.url));
-      response.cookies.delete("sarh_session");
+      const response = NextResponse.redirect(loginUrl);
+      if (studentToken) response.cookies.delete("sarh_session");
       return response;
     }
+    return NextResponse.next();
   }
 
   // 5. Redirect logged-in students away from student login pages
   const isAuthPage = pathname === "/login" || pathname === "/register";
-  if (isAuthPage && studentToken) {
-    try {
-      // Only redirect if the token is actually VALID
-      const parts = studentToken.split(".");
-      if (parts.length === 2) {
-        const sessionStr = Buffer.from(parts[0], "base64").toString("utf8");
-        const signature = parts[1];
-        const expectedSignature = crypto.createHmac("sha256", AUTH_SECRET).update(sessionStr).digest("hex");
-        
-        if (signature === expectedSignature) {
-          const sessionData = JSON.parse(sessionStr);
-          if (new Date(sessionData.expires) > new Date()) {
-            return NextResponse.redirect(new URL("/student", request.url));
-          }
-        }
-      }
-      // If we reach here, the token is invalid, so let them stay on the auth page but clear the cookie
-      const response = NextResponse.next();
-      response.cookies.delete("sarh_session");
-      return response;
-    } catch (e) {
+  if (isAuthPage) {
+    const session = await verifyToken(studentToken);
+    if (session) {
+      return NextResponse.redirect(new URL("/student", request.url));
+    }
+    // If token exists but is invalid, clear it
+    if (studentToken) {
       const response = NextResponse.next();
       response.cookies.delete("sarh_session");
       return response;
@@ -121,8 +105,6 @@ export function proxy(request: NextRequest) {
 
   return NextResponse.next();
 }
-
-export default proxy;
 
 export const config = {
   matcher: [

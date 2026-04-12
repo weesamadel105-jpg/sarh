@@ -6,6 +6,13 @@ import { supabase } from "./supabase";
 const USERS_FILE = path.join(process.cwd(), "uploads", "users.json");
 const IS_VERCEL = process.env.VERCEL === "1" || !!process.env.VERCEL_URL;
 
+// Determine if we should use Supabase as the SINGLE auth system
+const USE_SUPABASE = !!(
+  supabase && 
+  process.env.NEXT_PUBLIC_SUPABASE_URL && 
+  !process.env.NEXT_PUBLIC_SUPABASE_URL.includes("placeholder")
+);
+
 export interface UserRecord {
   id: string;
   email: string;
@@ -19,23 +26,28 @@ export interface UserRecord {
 }
 
 export async function getUsers(): Promise<UserRecord[]> {
-  try {
-    if (supabase && process.env.NEXT_PUBLIC_SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL.includes("placeholder")) {
+  if (USE_SUPABASE) {
+    try {
       const { data, error } = await supabase.from("users").select("*");
-      if (!error && data) {
-        return data.map(u => ({
-          id: u.id,
-          email: u.email,
-          passwordHash: u.password,
-          createdAt: u.created_at,
-        }));
+      if (error) {
+        console.error("[Supabase Error] getUsers:", error.message);
+        return [];
       }
-      if (error) console.error("[Supabase Error] getUsers:", error.message);
+      return (data || []).map(u => ({
+        id: u.id,
+        email: u.email,
+        passwordHash: u.password,
+        createdAt: u.created_at,
+        name: u.name,
+        role: u.role || "student"
+      }));
+    } catch (err) {
+      console.error("[Auth Error] Supabase fetch failed:", err);
+      return [];
     }
-  } catch (err) {
-    console.error("[Auth Error] Supabase fetch failed:", err);
   }
 
+  // Fallback to local JSON ONLY if Supabase is NOT configured
   try {
     const data = await fs.readFile(USERS_FILE, "utf-8");
     if (!data || data.trim() === "") return [];
@@ -47,7 +59,9 @@ export async function getUsers(): Promise<UserRecord[]> {
 }
 
 export async function saveUsers(users: UserRecord[]): Promise<void> {
-  if (IS_VERCEL) return;
+  // If using Supabase, we don't save to JSON.
+  // Actually, individual user creation is handled by createUser.
+  if (USE_SUPABASE || IS_VERCEL) return;
 
   try {
     const dir = path.dirname(USERS_FILE);
@@ -62,8 +76,8 @@ export async function saveUsers(users: UserRecord[]): Promise<void> {
 export async function findUserByEmail(email: string): Promise<UserRecord | undefined> {
   if (!email) return undefined;
   
-  try {
-    if (supabase && process.env.NEXT_PUBLIC_SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL.includes("placeholder")) {
+  if (USE_SUPABASE) {
+    try {
       const { data, error } = await supabase
         .from("users")
         .select("*")
@@ -76,31 +90,40 @@ export async function findUserByEmail(email: string): Promise<UserRecord | undef
           email: data.email,
           passwordHash: data.password,
           createdAt: data.created_at,
+          name: data.name,
+          role: data.role || "student"
         };
       }
-      if (error && error.code !== "PGRST116") console.error("[Supabase Error] findUserByEmail:", error.message);
+      if (error && error.code !== "PGRST116") {
+        console.error("[Supabase Error] findUserByEmail:", error.message);
+      }
+      return undefined;
+    } catch (err) {
+      console.error("[Auth Error] Supabase findUserByEmail failed:", err);
+      return undefined;
     }
-  } catch (err) {
-    console.error("[Auth Error] Supabase findUserByEmail failed:", err);
   }
 
+  // Local JSON only if Supabase not used
   const users = await getUsers();
   return users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
 }
 
-export async function createUser(email: string, passwordPlain: string): Promise<UserRecord> {
+export async function createUser(email: string, passwordPlain: string, name?: string): Promise<UserRecord> {
   const passwordHash = await bcrypt.hash(passwordPlain, 10);
   const createdAt = new Date().toISOString();
 
-  try {
-    if (supabase && process.env.NEXT_PUBLIC_SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL.includes("placeholder")) {
+  if (USE_SUPABASE) {
+    try {
       const { data, error } = await supabase
         .from("users")
         .insert([
           {
             email: email.toLowerCase(),
             password: passwordHash,
-            created_at: createdAt
+            created_at: createdAt,
+            name: name || email.split("@")[0],
+            role: "student"
           }
         ])
         .select()
@@ -112,20 +135,29 @@ export async function createUser(email: string, passwordPlain: string): Promise<
           email: data.email,
           passwordHash: data.password,
           createdAt: data.created_at,
+          name: data.name,
+          role: data.role || "student"
         };
       }
-      if (error) console.error("[Supabase Signup Error]", error.message);
+      if (error) {
+        console.error("[Supabase Signup Error]", error.message);
+        throw new Error(error.message);
+      }
+    } catch (err: any) {
+      console.error("[Auth Error] Supabase createUser failed:", err);
+      throw err;
     }
-  } catch (err) {
-    console.error("[Auth Error] Supabase createUser failed:", err);
   }
 
+  // Local JSON only if Supabase not used
   const users = await getUsers();
   const newUser: UserRecord = {
     id: Math.random().toString(36).substring(2, 15),
     email: email.toLowerCase(),
     passwordHash,
     createdAt,
+    name: name || email.split("@")[0],
+    role: "student"
   };
 
   users.push(newUser);
