@@ -14,6 +14,7 @@ import {
   RefreshCw
 } from "lucide-react";
 import { useAuth } from "@/app/lib/auth/AuthContext";
+import { supabase } from "@/lib/supabase";
 
 interface Message {
   id?: string;
@@ -60,13 +61,36 @@ export default function AdminChatClient() {
     }
   }, [requestId]);
 
+  // Realtime subscription
   useEffect(() => {
-    if (!isAuthLoading && user && user.role === "admin" && requestId) {
-      fetchMessages();
-      const interval = setInterval(fetchMessages, 4000);
-      return () => clearInterval(interval);
-    }
-  }, [user, isAuthLoading, requestId, fetchMessages]);
+    if (!requestId) return;
+
+    fetchMessages();
+
+    const channel = supabase
+      .channel(`admin_chat:${requestId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `requestId=eq.${requestId}`
+        },
+        (payload) => {
+          const newMessage = payload.new as Message;
+          setMessages((prev) => {
+            if (prev.some(m => m.id === newMessage.id)) return prev;
+            return [...prev, newMessage];
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [requestId, fetchMessages]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();

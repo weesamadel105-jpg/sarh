@@ -65,7 +65,7 @@ export function proxy(request: NextRequest) {
     
     try {
       const parts = studentToken.split(".");
-      if (parts.length !== 2) throw new Error("Invalid token");
+      if (parts.length !== 2) throw new Error("Invalid token format");
 
       const sessionStr = Buffer.from(parts[0], "base64").toString("utf8");
       const signature = parts[1];
@@ -82,14 +82,41 @@ export function proxy(request: NextRequest) {
 
       return NextResponse.next();
     } catch (e) {
-      return NextResponse.redirect(new URL("/login", request.url));
+      console.error("Middleware Auth Error:", e instanceof Error ? e.message : "Unknown error");
+      // Clear the invalid cookie and redirect to login
+      const response = NextResponse.redirect(new URL("/login", request.url));
+      response.cookies.delete("sarh_session");
+      return response;
     }
   }
 
   // 5. Redirect logged-in students away from student login pages
   const isAuthPage = pathname === "/login" || pathname === "/register";
   if (isAuthPage && studentToken) {
-    return NextResponse.redirect(new URL("/student", request.url));
+    try {
+      // Only redirect if the token is actually VALID
+      const parts = studentToken.split(".");
+      if (parts.length === 2) {
+        const sessionStr = Buffer.from(parts[0], "base64").toString("utf8");
+        const signature = parts[1];
+        const expectedSignature = crypto.createHmac("sha256", AUTH_SECRET).update(sessionStr).digest("hex");
+        
+        if (signature === expectedSignature) {
+          const sessionData = JSON.parse(sessionStr);
+          if (new Date(sessionData.expires) > new Date()) {
+            return NextResponse.redirect(new URL("/student", request.url));
+          }
+        }
+      }
+      // If we reach here, the token is invalid, so let them stay on the auth page but clear the cookie
+      const response = NextResponse.next();
+      response.cookies.delete("sarh_session");
+      return response;
+    } catch (e) {
+      const response = NextResponse.next();
+      response.cookies.delete("sarh_session");
+      return response;
+    }
   }
 
   return NextResponse.next();

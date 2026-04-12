@@ -374,8 +374,11 @@ export default function AdminControlRoom() {
       {/* Sidebar */}
       <aside className="fixed right-0 top-0 bottom-0 w-64 bg-slate-900 border-l border-slate-800 z-50 hidden lg:block">
         <div className="p-6">
-          <Link href="/">
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent mb-10">صرح</h1>
+          <Link href="/" className="flex items-center gap-3 mb-10">
+            <div className="w-10 h-10 gold-gradient rounded-xl flex items-center justify-center shadow-lg shadow-gold/20">
+              <span className="text-primary-dark font-black text-xl">ص</span>
+            </div>
+            <h1 className="text-2xl font-black text-white">غرفة تحكم صرح</h1>
           </Link>
           
           <nav className="space-y-2">
