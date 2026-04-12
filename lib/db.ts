@@ -3,6 +3,8 @@ import path from "path";
 import bcrypt from "bcryptjs";
 import { supabase } from "./supabase";
 
+export { supabase };
+
 const USERS_FILE = path.join(process.cwd(), "uploads", "users.json");
 const IS_VERCEL = process.env.VERCEL === "1" || !!process.env.VERCEL_URL;
 
@@ -249,11 +251,15 @@ export async function saveRequest(request: RequestRecord): Promise<void> {
           }
         ]);
 
-      if (!error) return;
-      console.error("[Supabase Request Error]", error.message);
+      if (error) {
+        console.error("[Supabase Request Error] Full Details:", error);
+        throw error;
+      }
+      return;
     }
   } catch (err) {
     console.error("[Auth Error] Supabase saveRequest failed:", err);
+    throw err;
   }
 
   const requests = await getRequests();

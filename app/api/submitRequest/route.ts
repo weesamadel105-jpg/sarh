@@ -109,7 +109,8 @@ export async function POST(req: NextRequest) {
     console.error('CRITICAL: Error in submitRequest pipeline:', error);
     return NextResponse.json({ 
       error: 'حدث خطأ فني في السيرفر أثناء إرسال الطلب. يرجى المحاولة لاحقاً.',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: error.message || error,
+      supabaseError: error
     }, { status: 500 });
   }
 }
