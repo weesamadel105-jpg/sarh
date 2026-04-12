@@ -16,11 +16,11 @@ import {
 import { useAuth } from "@/app/lib/auth/AuthContext";
 
 interface Message {
+  id?: string;
   requestId: string;
   sender: "student" | "admin";
-  text: string;
-  timestamp: number;
-  status: "sent";
+  message: string;
+  createdAt: string;
 }
 
 export default function AdminChatClient() {
@@ -70,27 +70,41 @@ export default function AdminChatClient() {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !user || !requestId || isSending) return;
+    const inputMessage = newMessage.trim();
+    if (!inputMessage || !user || !requestId || isSending) return;
 
     setIsSending(true);
     try {
+      console.log("[Admin Chat] Sending reply:", { requestId, message: inputMessage });
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           requestId,
           sender: "admin",
-          text: newMessage,
+          message: inputMessage,
         }),
       });
 
       const data = await res.json();
+      console.log("[Admin Chat] Server response:", data);
+
       if (data.success) {
-        setMessages(prev => [...prev, data.message]);
+        const confirmedMsg = data.message || {
+          requestId,
+          sender: "admin",
+          message: inputMessage,
+          createdAt: new Date().toISOString()
+        };
+        setMessages(prev => [...prev, confirmedMsg]);
         setNewMessage("");
+        fetchMessages();
+      } else {
+        throw new Error(data.error || "Failed to send");
       }
     } catch (error) {
-      console.error("Send message failed:", error);
+      console.error("[Admin Chat] Send message failed:", error);
+      alert("فشل إرسال الرد. يرجى التحقق من الاتصال.");
     } finally {
       setIsSending(false);
     }
@@ -159,7 +173,7 @@ export default function AdminChatClient() {
           <AnimatePresence initial={false}>
             {messages.map((msg) => (
               <motion.div
-                key={msg.timestamp + msg.text}
+                key={msg.id || (msg.createdAt + msg.message)}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 className={`flex ${msg.sender === "admin" ? "justify-start" : "justify-end"}`}
@@ -169,12 +183,12 @@ export default function AdminChatClient() {
                     ? "bg-cyan-600 text-white rounded-br-none" 
                     : "bg-slate-800 text-slate-200 rounded-bl-none border border-slate-700"
                 }`}>
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.message}</p>
                   <div className={`text-[10px] mt-2 flex items-center gap-1 ${
                     msg.sender === "admin" ? "text-cyan-200" : "text-slate-500"
                   }`}>
                     <Clock className="h-3 w-3" />
-                    {new Date(msg.timestamp).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}
+                    {new Date(msg.createdAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}
                     {msg.sender === "admin" && <Check className="h-3 w-3 ml-1" />}
                   </div>
                 </div>

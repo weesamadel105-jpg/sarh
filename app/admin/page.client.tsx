@@ -21,38 +21,44 @@ import {
   X,
   Upload,
   Lock,
-  ChevronRight
+  ChevronRight,
+  Clock
 } from "lucide-react";
 import { useAuth } from "../lib/auth/AuthContext";
 import { Button } from "@/components/shared/Button";
+import { useRouter } from "next/navigation";
 
 interface User {
   id: string;
-  name: string;
+  name?: string;
   email: string;
   role: "student" | "teacher" | "admin";
   status: "active" | "inactive";
   joinDate: string;
   ordersCount?: number;
+  createdAt?: string;
 }
 
 interface Order {
   id: string;
-  title: string;
-  student: string;
-  teacher: string;
+  name: string;
+  email: string;
+  service: string;
   status: "pending" | "in-progress" | "completed" | "cancelled";
-  amount: number;
-  createdAt: string;
+  date: string;
+  files?: any[];
+  [key: string]: any;
 }
 
 export default function AdminDashboard() {
   const { adminLogin, user } = useAuth();
+  const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [masterCode, setMasterCode] = useState("");
   const [loginError, setLoginError] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
-  const [realRequests, setRealRequests] = useState<any[]>([]);
+  const [realRequests, setRealRequests] = useState<Order[]>([]);
+  const [allStudents, setAllStudents] = useState<User[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [newestRequestId, setNewestRequestId] = useState<string | null>(null);
@@ -64,13 +70,86 @@ export default function AdminDashboard() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const deliveryFileInputRef = useRef<HTMLInputElement>(null);
 
+  // Fetch real requests
+  const fetchRequests = useCallback(async () => {
+    if (!isLoggedIn) return;
+    try {
+      const response = await fetch('/api/admin/requests');
+      const data = await response.json();
+      if (data.requests) {
+        setRealRequests(data.requests);
+      }
+    } catch (err) {
+      console.error("Failed to fetch requests:", err);
+    }
+  }, [isLoggedIn]);
+
+  // Fetch all students
+  const fetchStudents = useCallback(async () => {
+    if (!isLoggedIn) return;
+    try {
+      const response = await fetch('/api/admin/students');
+      const data = await response.json();
+      if (data.students) {
+        setAllStudents(data.students);
+      }
+    } catch (err) {
+      console.error("Failed to fetch students:", err);
+    }
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetchRequests();
+      fetchStudents();
+    }
+  }, [isLoggedIn, fetchRequests, fetchStudents]);
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm("هل أنت متأكد من حذف هذا الحساب نهائياً؟")) return;
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
+      if (res.ok) {
+        alert("تم حذف المستخدم بنجاح");
+        fetchStudents();
+      }
+    } catch (err) {
+      alert("فشل الحذف");
+    }
+  };
+
+  const handleDeleteRequest = async (requestId: string) => {
+    if (!confirm("هل أنت متأكد من حذف هذا الطلب؟")) return;
+    try {
+      const res = await fetch(`/api/admin/requests/${requestId}`, { method: 'DELETE' });
+      if (res.ok) {
+        alert("تم حذف الطلب بنجاح");
+        fetchRequests();
+      }
+    } catch (err) {
+      alert("فشل الحذف");
+    }
+  };
+
+  const handleUpdateStatus = async (requestId: string, newStatus: string) => {
+    try {
+      const res = await fetch(`/api/admin/requests/${requestId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (res.ok) fetchRequests();
+    } catch (err) {
+      alert("فشل تحديث الحالة");
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setLoginError("");
 
     try {
-      // Trim and ensure case-sensitive comparison on backend
       const result = await adminLogin(masterCode.trim());
       if (result.success) {
         setIsLoggedIn(true);
@@ -90,25 +169,6 @@ export default function AdminDashboard() {
     }
   }, [user]);
 
-  // Fetch real requests
-  const fetchRequests = useCallback(async () => {
-    if (!isLoggedIn) return;
-    try {
-      const response = await fetch('/api/admin/requests');
-      const data = await response.json();
-      if (data.requests) {
-        setRealRequests(data.requests);
-      }
-    } catch (err) {
-      console.error("Failed to fetch requests:", err);
-    }
-  }, [isLoggedIn]);
-
-  useEffect(() => {
-    fetchRequests();
-  }, [fetchRequests]);
-
-  // Delivery handler
   const handleDeliver = async (requestId: string) => {
     if (deliveryFiles.length === 0) {
       alert("يرجى اختيار ملف واحد على الأقل للتسليم.");
@@ -132,7 +192,7 @@ export default function AdminDashboard() {
         setDeliveringRequestId(null);
         setDeliveryNote("");
         setDeliveryFiles([]);
-        fetchRequests(); // Refresh table
+        fetchRequests();
       } else {
         const err = await response.json();
         alert(err.error || "فشل تسليم الملفات.");
@@ -448,11 +508,11 @@ export default function AdminDashboard() {
               <nav className="space-y-2">
                 {[
                   { id: "overview", label: "نظرة عامة", icon: BarChart3 },
-                  { id: "users", label: "المستخدمون", icon: Users },
-                  { id: "teachers", label: "المعلمين", icon: UserCheck },
-                  { id: "orders", label: "الطلبات", icon: FileText },
-                  { id: "analytics", label: "التحليلات", icon: TrendingUp },
-                  { id: "settings", label: "الإعدادات", icon: Settings },
+                  { id: "users", label: "إدارة الطلاب", icon: Users },
+                  { id: "orders", label: "التحكم بالطلبات", icon: FileText },
+                  { id: "chats", label: "مركز المحادثات", icon: Bell },
+                  { id: "services", label: "إدارة الخدمات", icon: Settings },
+                  { id: "settings", label: "إعدادات المنصة", icon: Shield },
                 ].map((item) => (
                   <button
                     key={item.id}
@@ -480,19 +540,17 @@ export default function AdminDashboard() {
               >
                 <div className="bg-[#002366] border border-blue-800 rounded-2xl p-8 relative overflow-hidden">
                   <div className="relative">
-                    <h2 className="text-3xl font-bold text-white mb-3">مرحباً بك في لوحة تحكم المشرف 👋</h2>
-                    <p className="text-blue-100 text-lg">راجع الأداء، إدارة المستخدمين، وتحليل الطلبات في مكان واحد.</p>
+                    <h2 className="text-3xl font-bold text-white mb-3">مرحباً بك في لوحة تحكم منصة صرح 👋</h2>
+                    <p className="text-blue-100 text-lg">تحكم كامل في الطلاب، الطلبات، والخدمات من مكان واحد.</p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-                  {/* Stats Summary */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                   {[
-                    { label: "إجمالي المستخدمين", value: "1,280", icon: Users, color: "text-blue-400" },
-                    { label: "المعلمين النشطين", value: "92", icon: UserCheck, color: "text-green-400" },
-                    { label: "إجمالي الطلبات", value: "3,490", icon: FileText, color: "text-purple-400" },
-                    { label: "الإيرادات الشهرية", value: "$143K", icon: DollarSign, color: "text-cyan-400" },
-                    { label: "الاشتراكات النشطة", value: "876", icon: Calendar, color: "text-amber-400" },
+                    { label: "إجمالي الطلاب", value: allStudents.length, icon: Users, color: "text-blue-400" },
+                    { label: "إجمالي الطلبات", value: realRequests.length, icon: FileText, color: "text-purple-400" },
+                    { label: "طلبات قيد الانتظار", value: realRequests.filter(r => r.status === 'pending').length, icon: Clock, color: "text-yellow-400" },
+                    { label: "محادثات نشطة", value: Array.from(new Set(realRequests.map(r => r.id))).length, icon: Bell, color: "text-green-400" },
                   ].map((stat, i) => (
                     <div key={i} className="bg-[#002366] border border-blue-800 rounded-2xl p-6">
                       <div className="flex flex-col items-center gap-2">
@@ -506,9 +564,8 @@ export default function AdminDashboard() {
                   ))}
                 </div>
 
-                {/* Orders List in Overview */}
                 <div className="bg-[#002366] border border-blue-800 rounded-2xl p-6">
-                  <h3 className="text-xl font-semibold text-white mb-6">أحدث الطلبات المستلمة</h3>
+                  <h3 className="text-xl font-semibold text-white mb-6">أحدث الطلبات</h3>
                   <div className="overflow-x-auto">
                     <table className="min-w-full text-right">
                       <thead>
@@ -516,12 +573,11 @@ export default function AdminDashboard() {
                           <th className="py-3 px-4 text-blue-200 font-medium">الطالب</th>
                           <th className="py-3 px-4 text-blue-200 font-medium">الخدمة</th>
                           <th className="py-3 px-4 text-blue-200 font-medium">الحالة</th>
-                          <th className="py-3 px-4 text-blue-200 font-medium">الملفات</th>
                           <th className="py-3 px-4 text-blue-200 font-medium">الإجراءات</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {realRequests.map((request) => (
+                        {realRequests.slice(0, 5).map((request) => (
                           <tr key={request.id} className="border-b border-blue-800/50">
                             <td className="py-4 px-4 text-white font-medium">{request.name}</td>
                             <td className="py-4 px-4 text-blue-100">{request.service}</td>
@@ -532,27 +588,9 @@ export default function AdminDashboard() {
                             </td>
                             <td className="py-4 px-4">
                               <div className="flex gap-2">
-                                {request.files?.map((f: any, i: number) => (
-                                  <a 
-                                    key={i} 
-                                    href={f.path} 
-                                    className="p-2 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-all"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                  >
-                                    <Download className="h-4 w-4" />
-                                  </a>
-                                ))}
+                                <Button size="sm" onClick={() => router.push(`/admin/chat?requestId=${request.id}`)}>دردشة</Button>
+                                <Button size="sm" variant="outline" onClick={() => setDeliveringRequestId(request.id)}>تسليم</Button>
                               </div>
-                            </td>
-                            <td className="py-4 px-4">
-                              <Button 
-                                size="sm" 
-                                className="bg-white text-[#002366] hover:bg-blue-50"
-                                onClick={() => setDeliveringRequestId(request.id)}
-                              >
-                                تسليم
-                              </Button>
                             </td>
                           </tr>
                         ))}
@@ -563,11 +601,77 @@ export default function AdminDashboard() {
               </motion.div>
             )}
 
-            {/* Other tabs placeholder */}
-            {activeTab !== "overview" && (
+            {activeTab === "users" && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+                <div className="bg-[#002366] border border-blue-800 rounded-2xl p-6">
+                  <h3 className="text-xl font-bold text-white mb-6">إدارة الطلاب المسجلين</h3>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-right">
+                      <thead>
+                        <tr className="border-b border-blue-700/50 text-blue-200">
+                          <th className="py-3 px-4">البريد الإلكتروني</th>
+                          <th className="py-3 px-4">تاريخ الانضمام</th>
+                          <th className="py-3 px-4">الإجراءات</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {allStudents.map(student => (
+                          <tr key={student.id} className="border-b border-blue-800/50">
+                            <td className="py-4 px-4 text-white">{student.email}</td>
+                            <td className="py-4 px-4 text-blue-100">{new Date(student.createdAt || "").toLocaleDateString('ar-SA')}</td>
+                            <td className="py-4 px-4">
+                              <button onClick={() => handleDeleteUser(student.id)} className="p-2 text-red-400 hover:bg-red-400/10 rounded-lg">
+                                <Trash2 className="h-5 w-5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {activeTab === "orders" && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+                <div className="bg-[#002366] border border-blue-800 rounded-2xl p-6">
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-xl font-bold text-white">التحكم بالطلبات</h3>
+                  </div>
+                  <div className="space-y-4">
+                    {realRequests.map(order => (
+                      <div key={order.id} className="bg-white/5 border border-white/10 rounded-xl p-4 flex flex-wrap justify-between items-center gap-4">
+                        <div>
+                          <p className="text-white font-bold">{order.service}</p>
+                          <p className="text-xs text-blue-200">{order.name} - {order.email}</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <select 
+                            value={order.status}
+                            onChange={(e) => handleUpdateStatus(order.id, e.target.value)}
+                            className="bg-slate-900 border border-slate-700 text-white text-xs rounded-lg p-2"
+                          >
+                            <option value="pending">معلقة</option>
+                            <option value="in-progress">قيد التنفيذ</option>
+                            <option value="completed">مكتملة</option>
+                            <option value="cancelled">ملغاة</option>
+                          </select>
+                          <Button size="sm" onClick={() => router.push(`/admin/chat?requestId=${order.id}`)}>محادثة</Button>
+                          <button onClick={() => handleDeleteRequest(order.id)} className="text-red-400 p-2"><Trash2 className="h-5 w-5"/></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Other tabs as placeholders */}
+            {["chats", "services", "settings"].includes(activeTab) && (
               <div className="bg-[#002366] border border-blue-800 rounded-2xl p-8 text-center">
-                <h2 className="text-2xl font-bold text-white mb-4">قسم {activeTab}</h2>
-                <p className="text-blue-100">هذا القسم قيد التحديث ليتناسب مع التصميم الجديد.</p>
+                <h2 className="text-2xl font-bold text-white mb-4">قسم {activeTab} قيد التطوير</h2>
+                <p className="text-blue-100">هذا القسم سيتم ربطه قريباً بالكامل.</p>
               </div>
             )}
           </div>

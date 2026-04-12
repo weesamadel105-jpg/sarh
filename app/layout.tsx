@@ -1,5 +1,6 @@
 import { AuthProvider } from "./lib/auth/AuthContext";
 import "./globals.css";
+import SupportWidget from "@/components/shared/SupportWidget";
 
 export default function RootLayout({
   children,
@@ -11,6 +12,7 @@ export default function RootLayout({
       <body>
         <AuthProvider>
           {children}
+          <SupportWidget />
         </AuthProvider>
       </body>
     </html>

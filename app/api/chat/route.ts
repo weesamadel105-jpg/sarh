@@ -1,17 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs/promises";
-import path from "path";
 import { verifyAdminSession, verifyStudentSession } from "@/lib/auth";
-
-const CHAT_FILE = path.join(process.cwd(), "uploads", "chat.json");
-
-async function ensureChatFile() {
-  try {
-    await fs.access(CHAT_FILE);
-  } catch {
-    await fs.writeFile(CHAT_FILE, JSON.stringify([]));
-  }
-}
+import { getChatMessages, saveChatMessage, ChatMessage } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
   try {
@@ -22,16 +11,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 
-    await ensureChatFile();
     const { searchParams } = new URL(req.url);
     const requestId = searchParams.get("requestId");
 
-    const data = await fs.readFile(CHAT_FILE, "utf-8");
-    let messages = JSON.parse(data);
-
-    if (requestId) {
-      messages = messages.filter((m: any) => m.requestId === requestId);
+    if (!requestId) {
+      return NextResponse.json({ success: false, error: "Missing requestId" }, { status: 400 });
     }
+
+    const messages = await getChatMessages(requestId);
 
     return NextResponse.json({ success: true, messages });
   } catch (error) {
@@ -49,27 +36,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 
-    await ensureChatFile();
     const body = await req.json();
-    const { requestId, sender, text } = body;
+    const { requestId, sender, text, message } = body;
+    const finalMessage = text || message;
 
-    if (!requestId || !sender || !text) {
+    if (!requestId || !sender || !finalMessage) {
       return NextResponse.json({ success: false, error: "Missing fields" }, { status: 400 });
     }
 
-    const data = await fs.readFile(CHAT_FILE, "utf-8");
-    const messages = JSON.parse(data);
-
-    const newMessage = {
+    const newMessage: ChatMessage = {
       requestId,
       sender, // "student" | "admin"
-      text,
-      timestamp: Date.now(),
-      status: "sent",
+      message: finalMessage,
+      createdAt: new Date().toISOString()
     };
 
-    messages.push(newMessage);
-    await fs.writeFile(CHAT_FILE, JSON.stringify(messages, null, 2), "utf-8");
+    await saveChatMessage(newMessage);
 
     return NextResponse.json({ success: true, message: newMessage });
   } catch (error) {

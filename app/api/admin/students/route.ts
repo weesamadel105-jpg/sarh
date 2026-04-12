@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs/promises";
-import path from "path";
-
-const USERS_FILE = path.join(process.cwd(), "uploads", "users.json");
+import { verifyAdminSession } from "@/lib/auth";
+import { getUsers } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
   try {
-    const data = await fs.readFile(USERS_FILE, "utf-8");
-    const users = JSON.parse(data);
-    const students = users.filter((u: any) => u.role === "student");
+    const session = await verifyAdminSession();
+    if (!session) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    const users = await getUsers();
+    // In our simplified schema, all non-admin users can be treated as students
+    const students = users.filter((u: any) => u.role !== "admin");
+    
     return NextResponse.json({ success: true, students });
   } catch (error) {
     console.error("Fetch students error:", error);

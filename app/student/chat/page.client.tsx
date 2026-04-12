@@ -20,11 +20,11 @@ import { useAuth } from "@/app/lib/auth/AuthContext";
 import { useSearchParams } from "next/navigation";
 
 interface Message {
+  id?: string;
   requestId: string;
   sender: "student" | "admin";
-  text: string;
-  timestamp: number;
-  status: "sent";
+  message: string;
+  createdAt: string;
 }
 
 export default function StudentChatPage() {
@@ -108,7 +108,7 @@ export default function StudentChatPage() {
 
     // Must use a real requestId, never "general" or empty
     if (!currentSelectedRequest?.id || currentSelectedRequest.id === "general") {
-      console.error("Cannot send message: Missing or invalid requestId");
+      alert("يرجى اختيار طلب نشط لبدء المحادثة");
       return;
     }
 
@@ -116,12 +116,11 @@ export default function StudentChatPage() {
     const messagePayload = {
       requestId: currentSelectedRequest.id,
       sender: "student",
-      text: inputMessage,
-      timestamp: Date.now(),
-      status: "sent"
+      message: inputMessage,
     };
 
     try {
+      console.log("[Chat] Sending message:", messagePayload);
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -129,20 +128,26 @@ export default function StudentChatPage() {
       });
 
       const data = await res.json();
+      console.log("[Chat] Server response:", data);
+
       if (data.success) {
         // 1) Append message instantly to local thread
-        setMessages(prev => [...prev, data.message || messagePayload]);
+        const confirmedMsg = data.message || { ...messagePayload, createdAt: new Date().toISOString() };
+        setMessages(prev => [...prev, confirmedMsg]);
         
         // 2) Clear input
         setNewMessage("");
         setShowSentIndicator(true);
         setTimeout(() => setShowSentIndicator(false), 2000);
 
-        // 3) Refresh GET /api/chat?requestId=<same id>
+        // 3) Refresh thread
         fetchMessages();
+      } else {
+        throw new Error(data.error || "Failed to send");
       }
     } catch (error) {
-      console.error("Send message failed:", error);
+      console.error("[Chat] Send message failed:", error);
+      alert("فشل إرسال الرسالة. يرجى المحاولة مرة أخرى.");
     } finally {
       setIsSending(false);
     }
@@ -200,7 +205,7 @@ export default function StudentChatPage() {
         <AnimatePresence initial={false}>
           {messages.map((msg) => (
             <motion.div
-              key={msg.timestamp + msg.text}
+              key={msg.id || (msg.createdAt + msg.message)}
               initial={{ opacity: 0, y: 10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               className={`flex ${msg.sender === "student" ? "justify-start" : "justify-end"}`}
@@ -210,12 +215,12 @@ export default function StudentChatPage() {
                   ? "bg-cyan-600 text-white rounded-br-none" 
                   : "bg-slate-800 text-slate-200 rounded-bl-none border border-slate-700"
               }`}>
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.message}</p>
                 <div className={`text-[10px] mt-2 flex items-center gap-1 ${
                   msg.sender === "student" ? "text-cyan-200" : "text-slate-500"
                 }`}>
                   <Clock className="h-3 w-3" />
-                  {new Date(msg.timestamp).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}
+                  {new Date(msg.createdAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}
                   {msg.sender === "student" && <Check className="h-3 w-3 ml-1" />}
                 </div>
               </div>

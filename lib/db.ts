@@ -235,3 +235,94 @@ export async function saveRequest(request: RequestRecord): Promise<void> {
     throw error;
   }
 }
+
+// --- Chat Logic ---
+
+export interface ChatMessage {
+  id?: string;
+  requestId: string;
+  sender: "student" | "admin";
+  message: string;
+  createdAt: string;
+}
+
+export async function getChatMessages(requestId: string): Promise<ChatMessage[]> {
+  if (supabase) {
+    const { data, error } = await supabase
+      .from("chat_messages")
+      .select("*")
+      .eq("requestId", requestId)
+      .order("createdAt", { ascending: true });
+    
+    if (!error && data) {
+      return data.map(m => ({
+        id: m.id,
+        requestId: m.requestId,
+        sender: m.sender,
+        message: m.message,
+        createdAt: m.createdAt
+      }));
+    }
+    if (error) console.error("[Supabase Chat Error] getMessages:", error.message);
+  }
+
+  // Fallback to local file if needed (though requested to use Supabase)
+  const CHAT_FILE = path.join(process.cwd(), "uploads", "chat.json");
+  try {
+    const data = await fs.readFile(CHAT_FILE, "utf-8");
+    const allMessages = JSON.parse(data);
+    return allMessages
+      .filter((m: any) => m.requestId === requestId)
+      .map((m: any) => ({
+        requestId: m.requestId,
+        sender: m.sender,
+        message: m.text || m.message,
+        createdAt: new Date(m.timestamp || m.createdAt).toISOString()
+      }))
+      .sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  } catch {
+    return [];
+  }
+}
+
+export async function saveChatMessage(msg: ChatMessage): Promise<void> {
+  if (supabase) {
+    const { error } = await supabase
+      .from("chat_messages")
+      .insert([
+        {
+          requestId: msg.requestId,
+          sender: msg.sender,
+          message: msg.message,
+          createdAt: msg.createdAt || new Date().toISOString()
+        }
+      ]);
+
+    if (!error) return;
+    console.error("[Supabase Chat Error] saveMessage:", error.message);
+  }
+
+  // Local fallback
+  const CHAT_FILE = path.join(process.cwd(), "uploads", "chat.json");
+  try {
+    const data = await fs.readFile(CHAT_FILE, "utf-8");
+    const messages = JSON.parse(data);
+    messages.push({
+      requestId: msg.requestId,
+      sender: msg.sender,
+      text: msg.message,
+      timestamp: new Date(msg.createdAt).getTime(),
+      status: "sent"
+    });
+    await fs.writeFile(CHAT_FILE, JSON.stringify(messages, null, 2));
+  } catch {
+    // If file doesn't exist, create it
+    await fs.writeFile(CHAT_FILE, JSON.stringify([{
+      requestId: msg.requestId,
+      sender: msg.sender,
+      text: msg.message,
+      timestamp: new Date(msg.createdAt).getTime(),
+      status: "sent"
+    }], null, 2));
+  }
+}
