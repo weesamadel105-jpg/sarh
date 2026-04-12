@@ -1,0 +1,53 @@
+[
+  {
+    "id": "1775849512258",
+    "studentId": "k5r8zmgqa5",
+    "requestId": "general",
+    "sender": "student",
+    "text": "ح",
+    "timestamp": 1775849512258,
+    "status": "sent"
+  },
+  {
+    "requestId": "general",
+    "sender": "student",
+    "text": "د",
+    "timestamp": 1775850468366,
+    "status": "sent"
+  },
+  {
+    "requestId": "REQ-1775746699698-W7EHD",
+    "sender": "admin",
+    "text": "دن",
+    "timestamp": 1775850495680,
+    "status": "sent"
+  },
+  {
+    "requestId": "general",
+    "sender": "student",
+    "text": "دن",
+    "timestamp": 1775850506130,
+    "status": "sent"
+  },
+  {
+    "requestId": "REQ-1775746699698-W7EHD",
+    "sender": "student",
+    "text": "lk",
+    "timestamp": 1775853506955,
+    "status": "sent"
+  },
+  {
+    "requestId": "REQ-1775746699698-W7EHD",
+    "sender": "admin",
+    "text": "السلام عليكم ",
+    "timestamp": 1775853526932,
+    "status": "sent"
+  },
+  {
+    "requestId": "REQ-1775746699698-W7EHD",
+    "sender": "student",
+    "text": "وعليكم السلام",
+    "timestamp": 1775853536960,
+    "status": "sent"
+  }
+]

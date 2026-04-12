@@ -1,0 +1,81 @@
+// import { NextRequest, NextResponse } from "next/server";
+// import crypto from "crypto";
+
+// const AUTH_SECRET = process.env.AUTH_SECRET || "sarh-super-secret-key-12345";
+
+// export function middleware(req: NextRequest) {
+//   const { pathname } = req.nextUrl;
+
+//   // Protect /admin routes
+//   if (pathname.startsWith("/admin") || pathname.startsWith("/sarh-core-ops-927")) {
+//     const token = req.cookies.get("sarh_admin_session")?.value;
+
+//     if (!token && pathname !== "/sarh-core-ops-927") {
+//       return NextResponse.redirect(new URL("/sarh-core-ops-927", req.url));
+//     }
+
+//     if (token) {
+//       try {
+//         const parts = token.split(".");
+//         if (parts.length !== 2) throw new Error("Invalid token");
+
+//         const sessionStr = Buffer.from(parts[0], "base64").toString("utf8");
+//         const signature = parts[1];
+
+//         const expectedSignature = crypto
+//           .createHmac("sha256", AUTH_SECRET)
+//           .update(sessionStr)
+//           .digest("hex");
+
+//         if (signature !== expectedSignature) throw new Error("Invalid signature");
+
+//         const sessionData = JSON.parse(sessionStr);
+//         if (new Date(sessionData.expires) < new Date()) throw new Error("Token expired");
+//         if (sessionData.role !== "admin") throw new Error("Not an admin");
+
+//         return NextResponse.next();
+//       } catch (error) {
+//         if (pathname !== "/sarh-core-ops-927") {
+//           return NextResponse.redirect(new URL("/sarh-core-ops-927", req.url));
+//         }
+//       }
+//     }
+//   }
+
+//   // Protect /student routes
+//   if (pathname.startsWith("/student")) {
+//     const token = req.cookies.get("sarh_session")?.value;
+
+//     if (!token) {
+//       return NextResponse.redirect(new URL("/login", req.url));
+//     }
+
+//     try {
+//       const parts = token.split(".");
+//       if (parts.length !== 2) throw new Error("Invalid token");
+
+//       const sessionStr = Buffer.from(parts[0], "base64").toString("utf8");
+//       const signature = parts[1];
+
+//       const expectedSignature = crypto
+//         .createHmac("sha256", AUTH_SECRET)
+//         .update(sessionStr)
+//         .digest("hex");
+
+//       if (signature !== expectedSignature) throw new Error("Invalid signature");
+
+//       const sessionData = JSON.parse(sessionStr);
+//       if (new Date(sessionData.expires) < new Date()) throw new Error("Token expired");
+
+//       return NextResponse.next();
+//     } catch (error) {
+//       return NextResponse.redirect(new URL("/login", req.url));
+//     }
+//   }
+
+//   return NextResponse.next();
+// }
+
+// export const config = {
+//   matcher: ["/admin/:path*", "/sarh-core-ops-927/:path*", "/student/:path*"],
+// };

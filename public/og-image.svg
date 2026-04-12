@@ -1,0 +1,8 @@
+<svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#1f2937"/>
+  <text x="600" y="200" text-anchor="middle" fill="#ffffff" font-family="Arial, sans-serif" font-size="48" font-weight="bold">منصة صرح</text>
+  <text x="600" y="280" text-anchor="middle" fill="#ffffff" font-family="Arial, sans-serif" font-size="24">للخدمات التعليمية الأكاديمية</text>
+  <text x="600" y="350" text-anchor="middle" fill="#9ca3af" font-family="Arial, sans-serif" font-size="18">حل الواجبات، كتابة الأبحاث، تحضير الامتحانات</text>
+  <text x="600" y="400" text-anchor="middle" fill="#9ca3af" font-family="Arial, sans-serif" font-size="18">باللغة العربية بجودة عالية</text>
+</svg></content>
+<parameter name="filePath">c:\sarh\public\og-image.svg
