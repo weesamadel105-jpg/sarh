@@ -44,6 +44,7 @@ interface Order {
 }
 
 const getStatusLabel = (status: OrderStatus) => {
+  if (!status) return "غير معروف";
   switch (status) {
     case "new":
     case "pending": return "جديد";
@@ -58,6 +59,7 @@ const getStatusLabel = (status: OrderStatus) => {
 };
 
 const getStatusColor = (status: OrderStatus) => {
+  if (!status) return "text-slate-400 bg-slate-400/10 border-slate-400/20";
   switch (status) {
     case "new":
     case "pending": return "text-blue-400 bg-blue-400/10 border-blue-400/20";
@@ -72,6 +74,7 @@ const getStatusColor = (status: OrderStatus) => {
 };
 
 const getStatusIcon = (status: OrderStatus) => {
+  if (!status) return <Clock className="h-4 w-4" />;
   switch (status) {
     case "new":
     case "pending": return <Plus className="h-4 w-4" />;
@@ -106,9 +109,15 @@ export default function StudentDashboard() {
 
   useEffect(() => {
     if (!isAuthLoading && !user) {
-      router.push("/login");
+      // Use window.location.pathname to check if we're actually on the student page
+      if (window.location.pathname.startsWith('/student')) {
+        const timer = setTimeout(() => {
+          if (!user) window.location.href = "/login";
+        }, 800); // Slightly longer to be safe
+        return () => clearTimeout(timer);
+      }
     }
-  }, [user, isAuthLoading, router]);
+  }, [user, isAuthLoading]);
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -116,9 +125,10 @@ export default function StudentDashboard() {
       
       try {
         const response = await fetch('/api/student/orders');
+        const data = await response.json();
+        
         if (response.ok) {
-          const data = await response.json();
-          if (data.orders) {
+          if (data && data.orders) {
             setOrders(
               data.orders.map((order: any) => ({
                 id: order.id || "",
@@ -132,12 +142,19 @@ export default function StudentDashboard() {
                 date: order.date
               }))
             );
+          } else {
+            setOrders([]);
           }
         } else {
-          setFetchError("حدث خطأ أثناء تحميل الطلبات.");
+          // If 401, the user is likely logged out, redirect is handled by middleware but we can clear user here too
+          if (response.status === 401) {
+            // No direct action needed as AuthContext/Middleware handle auth state
+          }
+          setFetchError(data.error || "حدث خطأ أثناء تحميل الطلبات.");
         }
       } catch (error) {
-        setFetchError("حدث خطأ أثناء تحميل الطلبات.");
+        console.error("Fetch orders error:", error);
+        setFetchError("حدث خطأ في الاتصال بالخادم.");
       } finally {
         setIsOrdersLoading(false);
       }
@@ -150,23 +167,41 @@ export default function StudentDashboard() {
 
   if (isAuthLoading) {
     return (
-      <div className="min-h-screen bg-primary flex items-center justify-center">
+      <div className="min-h-screen bg-primary-dark flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="w-16 h-16 border-4 border-gold border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-white font-bold text-xl">صرح</p>
+          <p className="text-white font-bold text-xl">جاري تحميل لوحة التحكم...</p>
         </div>
       </div>
     );
   }
 
-  if (!user) return null;
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-primary-dark flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-16 h-16 border-4 border-gold border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-white font-bold text-xl">جاري التحقق من الجلسة...</p>
+          <Button 
+            onClick={() => window.location.href = "/login"}
+            className="mt-4 bg-gold text-primary-dark font-bold px-6 py-2 rounded-xl"
+          >
+            الانتقال لصفحة الدخول
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const safeUserName = user?.name || "طالب صرح";
+  const safeUserEmail = user?.email || "";
 
   const unreadChatCount = 0; // Mock for now
 
   const stats = [
-    { label: "إجمالي الطلبات", value: orders.length, icon: FileText, color: "bg-blue-500" },
-    { label: "قيد التنفيذ", value: orders.filter(o => ["in_progress", "under_review"].includes(o.status)).length, icon: TrendingUp, color: "bg-purple-500" },
-    { label: "مكتملة", value: orders.filter(o => ["completed", "delivered"].includes(o.status)).length, icon: CheckCircle, color: "bg-green-500" },
+    { label: "إجمالي الطلبات", value: orders?.length || 0, icon: FileText, color: "bg-blue-500" },
+    { label: "قيد التنفيذ", value: orders?.filter(o => ["in_progress", "under_review"].includes(o.status)).length || 0, icon: TrendingUp, color: "bg-purple-500" },
+    { label: "مكتملة", value: orders?.filter(o => ["completed", "delivered"].includes(o.status)).length || 0, icon: CheckCircle, color: "bg-green-500" },
   ];
 
   return (
@@ -199,8 +234,8 @@ export default function StudentDashboard() {
             
             <div className="flex items-center gap-3">
               <div className="text-left hidden sm:block">
-                <p className="text-white font-bold text-sm">{user.name}</p>
-                <p className="text-text-secondary text-xs">{user.email}</p>
+                <p className="text-white font-bold text-sm">{safeUserName}</p>
+                <p className="text-text-secondary text-xs">{safeUserEmail}</p>
               </div>
               <div className="w-10 h-10 rounded-full gold-gradient p-[2px]">
                 <div className="w-full h-full rounded-full bg-primary-dark flex items-center justify-center overflow-hidden">
@@ -281,7 +316,7 @@ export default function StudentDashboard() {
                   <div className="relative flex flex-col md:flex-row items-center justify-between gap-6">
                     <div>
                       <h2 className="text-3xl md:text-4xl font-black text-white mb-3 leading-tight">
-                        مرحباً بك مجدداً، <span className="text-gold">{user.name.split(' ')[0]}</span>!
+                        مرحباً بك مجدداً، <span className="text-gold">{safeUserName.split(' ')[0]}</span>!
                       </h2>
                       <p className="text-blue-100/80 text-lg max-w-xl leading-relaxed">
                         نحن هنا لضمان تفوقك الدراسي. ابدأ الآن بطلب خدمة جديدة أو تابع تقدم طلباتك الحالية.

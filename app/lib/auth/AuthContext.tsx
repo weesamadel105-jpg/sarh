@@ -32,13 +32,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const checkUser = async () => {
       try {
-        const res = await fetch("/api/auth/session");
+        const res = await fetch("/api/auth/session", { cache: 'no-store' });
         const data = await res.json();
         if (data.user) {
           setUser(data.user);
+        } else {
+          setUser(null);
         }
       } catch (error) {
         console.error("Session check failed:", error);
+        setUser(null);
       } finally {
         setIsLoading(false);
       }

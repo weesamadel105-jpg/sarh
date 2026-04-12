@@ -42,8 +42,8 @@ export default function LoginPage() {
       const result = await login(email, password);
 
       if (result.success) {
-        // Always redirect students to dashboard
-        router.push("/student");
+        // Force replace to ensure clean transition
+        window.location.href = "/student";
       } else {
         setError(getErrorMessage(result.error || ""));
       }
