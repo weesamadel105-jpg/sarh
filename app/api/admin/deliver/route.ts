@@ -103,8 +103,11 @@ export async function POST(req: NextRequest) {
       deliveredFiles
     }, { status: 200 });
 
-  } catch (error) {
-    console.error('CRITICAL: Error in delivery pipeline:', error);
-    return NextResponse.json({ error: 'Internal server error during delivery' }, { status: 500 });
+  } catch (error: any) {
+    console.error('[Admin Deliver POST Error] Stack Trace:', error.stack);
+    return NextResponse.json({ 
+      error: 'حدث خطأ فني أثناء تسليم الطلب',
+      details: error.message 
+    }, { status: 500 });
   }
 }

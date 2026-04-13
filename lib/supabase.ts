@@ -4,22 +4,15 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-// Debugging (Remove in production)
-if (typeof window !== 'undefined') {
-  console.log("[Supabase Debug] URL:", supabaseUrl);
-  console.log("[Supabase Debug] Key exists:", !!supabaseAnonKey);
-}
+const isConfigured = !!(supabaseUrl && supabaseAnonKey && !supabaseUrl.includes("placeholder"));
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  if (typeof window !== 'undefined') {
-    console.error("CRITICAL: Supabase credentials missing in browser! Ensure NEXT_PUBLIC_ prefix is used in .env");
-  } else {
-    console.warn("Supabase credentials missing in server environment.");
-  }
+if (!isConfigured) {
+  const envType = typeof window !== 'undefined' ? 'browser' : 'server';
+  console.warn(`[Supabase Warning] Credentials missing or placeholder in ${envType}. Fallback to local storage may be active.`);
 }
 
 export const supabase = createClient(
-  supabaseUrl || "https://placeholder.supabase.co", // Avoid empty string to prevent fetch to current domain (HTML response)
+  supabaseUrl || "https://placeholder.supabase.co",
   supabaseAnonKey || "placeholder-key"
 );
 

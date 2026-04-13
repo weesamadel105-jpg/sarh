@@ -47,8 +47,8 @@ export async function GET() {
     });
 
     return NextResponse.json({ requests: validatedRequests });
-  } catch (error) {
-    console.error('Error fetching requests:', error);
-    return NextResponse.json({ error: 'Failed to fetch requests' }, { status: 500 });
+  } catch (error: any) {
+    console.error('[Admin Requests GET Error] Stack Trace:', error.stack);
+    return NextResponse.json({ error: 'حدث خطأ فني في جلب الطلبات', details: error.message }, { status: 500 });
   }
 }

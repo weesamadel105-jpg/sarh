@@ -56,8 +56,8 @@ export async function POST(req: NextRequest) {
         role: sessionData.role,
       },
     });
-  } catch (error) {
-    console.error("Admin login error:", error);
-    return NextResponse.json({ error: "حدث خطأ داخلي في الخادم" }, { status: 500 });
+  } catch (error: any) {
+    console.error("[Admin Login POST Error] Stack Trace:", error.stack);
+    return NextResponse.json({ error: "حدث خطأ داخلي في الخادم", details: error.message }, { status: 500 });
   }
 }

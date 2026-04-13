@@ -14,8 +14,8 @@ export async function GET(req: NextRequest) {
     const students = users.filter((u: any) => u.role !== "admin");
     
     return NextResponse.json({ success: true, students });
-  } catch (error) {
-    console.error("Fetch students error:", error);
-    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });
+  } catch (error: any) {
+    console.error('[Admin Students GET Error] Stack Trace:', error.stack);
+    return NextResponse.json({ success: false, error: "حدث خطأ في جلب بيانات الطلاب", details: error.message }, { status: 500 });
   }
 }
